@@ -10,6 +10,7 @@ import time
 import json
 import copy
 import pytz
+import re
 import xml.etree.ElementTree as ET
 
 import googleads
@@ -149,22 +150,58 @@ def get_attribution_window_bookmark(customer_id, stream_name):
                                           'last_attribution_window_date')
     return utils.strptime_with_tz(mid_bk_value) if mid_bk_value else None
 
+
+class DateParseError(Exception):
+    """DateParseError."""
+
+
+def convert_textual_date(date_str: str) -> datetime.datetime:
+    today = utils.now()
+    timedelta = 0
+
+    date_match = re.fullmatch(r'(\d+)daysAgo|(yesterday)', date_str)
+
+    if not date_match:
+        raise DateParseError()
+
+    if date_match.group(1):
+        # daysAgo match
+        timedelta = int(date_match.group(1))
+    else:
+        # yesterday match
+        timedelta = 1
+
+    return today - datetime.timedelta(days=timedelta)
+
+
+def process_date(date_str: str):
+    try:
+        parsed_date = utils.strptime_to_utc(date_str)
+    except Exception:
+        parsed_date = convert_textual_date(date_str)
+
+    return parsed_date
+
+
 def get_start_for_stream(customer_id, stream_name):
-    bk_value = bookmarks.get_bookmark(STATE,
-                                      state_key_name(customer_id, stream_name),
-                                      'date')
-    bk_start_date = utils.strptime_with_tz(bk_value or CONFIG['start_date'])
-    return bk_start_date
+    bk_value = bookmarks.get_bookmark(
+        STATE, state_key_name(customer_id, stream_name), "date"
+    )
+
+    return process_date(bk_value or CONFIG["start_date"])
+
 
 def apply_conversion_window(start_date):
     conversion_window_days = int(CONFIG.get('conversion_window_days', '-30'))
     return start_date+relativedelta(days=conversion_window_days)
 
+
 def get_end_date():
     if CONFIG.get('end_date'):
-        return utils.strptime_with_tz(CONFIG.get('end_date'))
+        return process_date(CONFIG.get('end_date'))
 
     return utils.now()
+
 
 def state_key_name(customer_id, report_name):
     return report_name + "_" + customer_id
