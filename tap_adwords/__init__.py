@@ -157,22 +157,25 @@ class DateParseError(Exception):
 
 def convert_textual_date(date_str: str) -> datetime.datetime:
     today = utils.now()
-    timedelta = 0
+    timedelta = {}
 
-    date_match = re.fullmatch(r'(\d+)daysAgo|(yesterday)', date_str)
+    date_match = re.fullmatch(r'(\d+)daysAgo|(yesterday)|(firstDayOfCurrentMonth)|firstDayOf(\d+)MonthsAgo', date_str)
 
     if not date_match:
         raise DateParseError()
 
     if date_match.group(1):
         # daysAgo match
-        timedelta = int(date_match.group(1))
-    else:
+        timedelta = {'days': -int(date_match.group(1))}
+    elif date_match.group(2):
         # yesterday match
-        timedelta = 1
+        timedelta = {'days': -1}
+    elif date_match.group(3):
+        timedelta = {'day': 1}
+    elif date_match.group(4):
+        timedelta = {'months': -int(date_match.group(4)), 'day': 1}
 
-    return today - datetime.timedelta(days=timedelta)
-
+    return today + relativedelta(**timedelta)
 
 def process_date(date_str: str):
     try:
